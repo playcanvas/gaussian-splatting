@@ -29,7 +29,7 @@ parser.add_argument("--camera", default="OPENCV", type=str)
 parser.add_argument("--colmap_executable", default="", type=str)
 parser.add_argument("--resize", action="store_true")
 parser.add_argument("--magick_executable", default="", type=str)
-parser.add_argument("--masks_path", "-s", type=str)
+parser.add_argument("--masks_path", type=str)
 args = parser.parse_args()
 colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_executable) > 0 else "colmap"
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
@@ -100,7 +100,6 @@ if args.masks_path is not None:
         --input_path " + args.source_path + "/distorted/sparse/0 \
         --output_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
         --output_type TXT")
-    print(model_converter_cmd)
     exit_code = os.system(model_converter_cmd)
     if exit_code != 0:
         logging.error(f"model_converter failed with code {exit_code}. Exiting.")
@@ -120,7 +119,6 @@ if args.masks_path is not None:
         --input_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
         --output_path " + args.source_path + "/alpha_undistorted_sparse \
         --output_type COLMAP")
-    print(seg_undist_cmd)
     exit_code = os.system(seg_undist_cmd)
     if exit_code != 0:
         logging.error(f"image_undistorter for segs failed with code {exit_code}. Exiting.")
