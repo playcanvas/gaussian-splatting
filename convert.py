@@ -134,14 +134,10 @@ if args.masks_path is not None:
     remove_dir_if_exist(f'{args.source_path}/images/')
     Path(f'{args.source_path}/images/').mkdir()
     for seg_path in tqdm(glob(args.source_path + "/alpha_undistorted_sparse/alphas/*.png")):
-        seg = np.array(Image.open(seg_path))
-        if seg.ndim == 2:
-            seg = seg[..., None]
-        if seg.ndim == 3:
-            seg = seg[..., :1]
-        img = np.array(Image.open(f'{args.source_path}/images_src/{Path(seg_path).stem}.jpg'))
-        img_alpha = np.concatenate([img, seg], axis=-1)
-        Image.fromarray(img_alpha).save(f'{args.source_path}/images/{Path(seg_path).stem}.png')
+        seg = Image.open(seg_path).convert('L')
+        img = Image.open(f'{args.source_path}/images_src/{Path(seg_path).stem}.jpg')
+        img.putalpha(seg)
+        img.save(f'{args.source_path}/images/{Path(seg_path).stem}.png')
 
     # switch models
     remove_dir_if_exist(f'{args.source_path}/sparse_src/')
