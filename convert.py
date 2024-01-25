@@ -141,8 +141,9 @@ if args.masks_path is not None:
         img.putalpha(seg)
         img.save(f'{args.source_path}/images/{Path(seg_path).stem}.png')
 
+    all_masks_paths = glob(args.source_path + "/alpha_undistorted_sparse/alphas/*.png")
     with mp.Pool() as pool:
-        pool.imap_unrdered(concat_alpha, glob(args.source_path + "/alpha_undistorted_sparse/alphas/*.png"))
+        list(tqdm(pool.imap_unordered(concat_alpha, all_masks_paths), total=len(all_masks_paths)))
 
     # switch models
     remove_dir_if_exist(f'{args.source_path}/sparse_src/')
