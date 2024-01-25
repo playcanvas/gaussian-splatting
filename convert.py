@@ -17,7 +17,7 @@ from pathlib import Path
 from tqdm import tqdm
 from glob import glob
 import shutil
-import cv2
+from PIL import Image
 import numpy as np
 
 # This Python script is based on the shell converter script provided in the MipNerF 360 repository.
@@ -134,10 +134,14 @@ if args.masks_path is not None:
     remove_dir_if_exist(f'{args.source_path}/images/')
     Path(f'{args.source_path}/images/').mkdir()
     for seg_path in tqdm(glob(args.source_path + "/alpha_undistorted_sparse/alphas/*.png")):
-        seg = cv2.imread(seg_path)[..., :1]
-        img = cv2.imread(f'{args.source_path}/images_src/{Path(seg_path).stem}.jpg')
+        seg = np.array(Image.open(seg_path))
+        if seg.dim == 2:
+            seg = seg[..., None]
+        if seg.dim == 3:
+            seg = seg[..., :1]
+        img = np.array(Image.open(f'{args.source_path}/images_src/{Path(seg_path).stem}.jpg'))
         img_alpha = np.concatenate([img, seg], axis=-1)
-        cv2.imwrite(f'{args.source_path}/images/{Path(seg_path).stem}.png', img_alpha)
+        Image.fromarray(img_alpha).save(f'{args.source_path}/images/{Path(seg_path).stem}.png')
 
     # switch models
     remove_dir_if_exist(f'{args.source_path}/sparse_src/')
