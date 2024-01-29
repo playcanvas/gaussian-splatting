@@ -89,6 +89,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
+        # use alpha masking with background color used for rendering
+        if viewpoint_cam.gt_alpha_mask is not None:
+            gt_image = gt_image * viewpoint_cam.gt_alpha_mask + bg[:, None, None].expand_as(gt_image) * (1. - viewpoint_cam.gt_alpha_mask)
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         loss.backward()

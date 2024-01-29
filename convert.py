@@ -13,6 +13,13 @@ import os
 import logging
 from argparse import ArgumentParser
 import shutil
+from pathlib import Path
+from tqdm import tqdm
+from glob import glob
+import shutil
+from PIL import Image
+import numpy as np
+import multiprocessing as mp
 
 # This Python script is based on the shell converter script provided in the MipNerF 360 repository.
 parser = ArgumentParser("Colmap converter")
@@ -23,6 +30,7 @@ parser.add_argument("--camera", default="OPENCV", type=str)
 parser.add_argument("--colmap_executable", default="", type=str)
 parser.add_argument("--resize", action="store_true")
 parser.add_argument("--magick_executable", default="", type=str)
+parser.add_argument("--masks_path", type=str)
 args = parser.parse_args()
 colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_executable) > 0 else "colmap"
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
@@ -72,10 +80,75 @@ img_undist_cmd = (colmap_command + " image_undistorter \
     --input_path " + args.source_path + "/distorted/sparse/0 \
     --output_path " + args.source_path + "\
     --output_type COLMAP")
+
 exit_code = os.system(img_undist_cmd)
 if exit_code != 0:
-    logging.error(f"Mapper failed with code {exit_code}. Exiting.")
+    logging.error(f"image_undistorter failed with code {exit_code}. Exiting.")
     exit(exit_code)
+
+
+def remove_dir_if_exist(path):
+    if Path(path).exists():
+        shutil.rmtree(path)
+
+
+if args.masks_path is not None:
+    remove_dir_if_exist(args.source_path + "/alpha_distorted_sparse_txt/")
+    Path(args.source_path + "/alpha_distorted_sparse_txt/").mkdir(exist_ok=True)
+    # We need to "hack" colmap to undistort segmentation maps modify paths
+    # First convert model to text format
+    model_converter_cmd = (colmap_command + " model_converter \
+        --input_path " + args.source_path + "/distorted/sparse/0 \
+        --output_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
+        --output_type TXT")
+    exit_code = os.system(model_converter_cmd)
+    if exit_code != 0:
+        logging.error(f"model_converter failed with code {exit_code}. Exiting.")
+        exit(exit_code)
+
+    # replace '.jpg' to '.png'
+    with open(args.source_path + "/alpha_distorted_sparse_txt/images.txt", "r+") as f:
+        images_txt = f.read()
+        images_txt = images_txt.replace('.jpg', '.png')
+        f.seek(0)
+        f.write(images_txt)
+        f.truncate()
+
+    # Undistort alpha masks
+    seg_undist_cmd = (colmap_command + " image_undistorter \
+        --image_path " + args.masks_path + " \
+        --input_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
+        --output_path " + args.source_path + "/alpha_undistorted_sparse \
+        --output_type COLMAP")
+    exit_code = os.system(seg_undist_cmd)
+    if exit_code != 0:
+        logging.error(f"image_undistorter for segs failed with code {exit_code}. Exiting.")
+        exit(exit_code)
+
+    # switch images
+    remove_dir_if_exist(f'{args.source_path}/alpha_undistorted_sparse/alphas')
+    Path(f'{args.source_path}/alpha_undistorted_sparse/images').replace(f'{args.source_path}/alpha_undistorted_sparse/alphas')
+    remove_dir_if_exist(f'{args.source_path}/images_src/')
+    Path(f'{args.source_path}/images/').replace(f'{args.source_path}/images_src/')
+
+    # concat undistorted images with undistorted alpha masks - TODO: make parallel
+    remove_dir_if_exist(f'{args.source_path}/images/')
+    Path(f'{args.source_path}/images/').mkdir()
+
+    def concat_alpha(seg_path):
+        seg = Image.open(seg_path).convert('L')
+        img = Image.open(f'{args.source_path}/images_src/{Path(seg_path).stem}.jpg')
+        img.putalpha(seg)
+        img.save(f'{args.source_path}/images/{Path(seg_path).stem}.png')
+
+    all_masks_paths = glob(args.source_path + "/alpha_undistorted_sparse/alphas/*.png")
+    with mp.Pool() as pool:
+        list(tqdm(pool.imap_unordered(concat_alpha, all_masks_paths), total=len(all_masks_paths)))
+
+    # switch models
+    remove_dir_if_exist(f'{args.source_path}/sparse_src/')
+    Path(f'{args.source_path}/sparse').replace(f'{args.source_path}/sparse_src/')
+    Path(f'{args.source_path}/alpha_undistorted_sparse/sparse').replace(f'{args.source_path}/sparse/')
 
 files = os.listdir(args.source_path + "/sparse")
 os.makedirs(args.source_path + "/sparse/0", exist_ok=True)
