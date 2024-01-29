@@ -22,18 +22,19 @@ def loadCam(args, id, cam_info, resolution_scale):
     if args.resolution in [1, 2, 4, 8]:
         resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
     else:  # should be a type that converts to float
+        max_length = max(orig_h, orig_w)
         if args.resolution == -1:
-            if orig_w > 1600:
+            if max_length > 1600:
                 global WARNED
                 if not WARNED:
                     print("[ INFO ] Encountered quite large input images (>1.6K pixels width), rescaling to 1.6K.\n "
                         "If this is not desired, please explicitly specify '--resolution/-r' as 1")
                     WARNED = True
-                global_down = orig_w / 1600
+                global_down = max_length / 1600
             else:
                 global_down = 1
         else:
-            global_down = orig_w / args.resolution
+            global_down = max_length / args.resolution
 
         scale = float(global_down) * float(resolution_scale)
         resolution = (int(orig_w / scale), int(orig_h / scale))
