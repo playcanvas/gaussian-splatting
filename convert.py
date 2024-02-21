@@ -73,6 +73,16 @@ if not args.skip_matching:
         logging.error(f"Mapper failed with code {exit_code}. Exiting.")
         exit(exit_code)
 
+    ### Convert model to text format so we can read cameras
+    convert_cmd = (colmap_command + " model_converter \
+        --input_path " + args.source_path + "/distorted/sparse/0 \
+        --output_path "  + args.source_path + "/distorted/sparse/0 \
+        --output_type TXT")
+    exit_code = os.system(convert_cmd)
+    if exit_code != 0:
+        logging.error(f"Convert failed with code {exit_code}. Exiting.")
+        exit(exit_code)
+
 ### Image undistortion
 ## We need to undistort our images into ideal pinhole intrinsics.
 img_undist_cmd = (colmap_command + " image_undistorter \
@@ -175,21 +185,21 @@ if(args.resize):
 
         destination_file = os.path.join(args.source_path, "images_2", file)
         shutil.copy2(source_file, destination_file)
-        exit_code = os.system(magick_command + " mogrify -resize 50% " + destination_file)
+        exit_code = os.system("mogrify -resize 50% " + destination_file)
         if exit_code != 0:
             logging.error(f"50% resize failed with code {exit_code}. Exiting.")
             exit(exit_code)
 
         destination_file = os.path.join(args.source_path, "images_4", file)
         shutil.copy2(source_file, destination_file)
-        exit_code = os.system(magick_command + " mogrify -resize 25% " + destination_file)
+        exit_code = os.system("mogrify -resize 25% " + destination_file)
         if exit_code != 0:
             logging.error(f"25% resize failed with code {exit_code}. Exiting.")
             exit(exit_code)
 
         destination_file = os.path.join(args.source_path, "images_8", file)
         shutil.copy2(source_file, destination_file)
-        exit_code = os.system(magick_command + " mogrify -resize 12.5% " + destination_file)
+        exit_code = os.system("mogrify -resize 12.5% " + destination_file)
         if exit_code != 0:
             logging.error(f"12.5% resize failed with code {exit_code}. Exiting.")
             exit(exit_code)
