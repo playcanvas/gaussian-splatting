@@ -31,6 +31,7 @@ parser.add_argument("--colmap_executable", default="", type=str)
 parser.add_argument("--resize", action="store_true")
 parser.add_argument("--magick_executable", default="", type=str)
 parser.add_argument("--masks_path", type=str)
+parser.add_argument("--generate_text_model", action="store_true")
 args = parser.parse_args()
 colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_executable) > 0 else "colmap"
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
@@ -174,16 +175,16 @@ if args.masks_path is not None:
     Path(f'{args.source_path}/sparse').replace(f'{args.source_path}/sparse_src/')
     Path(f'{args.source_path}/alpha_undistorted_sparse/sparse').replace(f'{args.source_path}/sparse/')
 
-
-### Convert model to text format so we can read cameras
-convert_cmd = (colmap_command + " model_converter \
-    --input_path " + args.source_path + "/sparse" + " \
-    --output_path "  + args.source_path + "/sparse" + " \
-    --output_type TXT")
-exit_code = os.system(convert_cmd)
-if exit_code != 0:
-    logging.error(f"Convert failed with code {exit_code}. Exiting.")
-    exit(exit_code)
+if args.generate_text_model:
+    ### Convert model to text format so we can read cameras
+    convert_cmd = (colmap_command + " model_converter \
+        --input_path " + args.source_path + "/sparse" + " \
+        --output_path "  + args.source_path + "/sparse" + " \
+        --output_type TXT")
+    exit_code = os.system(convert_cmd)
+    if exit_code != 0:
+        logging.error(f"Convert failed with code {exit_code}. Exiting.")
+        exit(exit_code)
 
 # move all files from sparse into sparse/0, as train.py expects it
 files = os.listdir(args.source_path + "/sparse")

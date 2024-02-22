@@ -475,6 +475,8 @@ python convert.py -s <location> --skip_matching [--resize] #If not resizing, Ima
   Path to the COLMAP executable (```.bat``` on Windows).
   #### --magick_executable
   Path to the ImageMagick executable.
+  #### --generate_text_model
+  Generate text model in sparse/0 folder
 </details>
 <br>
 
