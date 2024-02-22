@@ -97,17 +97,6 @@ str_index = str(index)
 distorted_sparse_path = args.source_path + "/distorted/sparse/" + str_index
 
 
-### Convert model to text format so we can read cameras
-convert_cmd = (colmap_command + " model_converter \
-    --input_path " + distorted_sparse_path + " \
-    --output_path "  + distorted_sparse_path + " \
-    --output_type TXT")
-exit_code = os.system(convert_cmd)
-if exit_code != 0:
-    logging.error(f"Convert failed with code {exit_code}. Exiting.")
-    exit(exit_code)
-
-
 ### Image undistortion
 ## We need to undistort our images into ideal pinhole intrinsics.
 img_undist_cmd = (colmap_command + " image_undistorter \
@@ -185,11 +174,23 @@ if args.masks_path is not None:
     Path(f'{args.source_path}/sparse').replace(f'{args.source_path}/sparse_src/')
     Path(f'{args.source_path}/alpha_undistorted_sparse/sparse').replace(f'{args.source_path}/sparse/')
 
+
+### Convert model to text format so we can read cameras
+convert_cmd = (colmap_command + " model_converter \
+    --input_path " + args.source_path + "/sparse" + " \
+    --output_path "  + args.source_path + "/sparse" + " \
+    --output_type TXT")
+exit_code = os.system(convert_cmd)
+if exit_code != 0:
+    logging.error(f"Convert failed with code {exit_code}. Exiting.")
+    exit(exit_code)
+
+# move all files from sparse into sparse/0, as train.py expects it
 files = os.listdir(args.source_path + "/sparse")
 os.makedirs(args.source_path + "/sparse/0", exist_ok=True)
 # Copy each file from the source directory to the destination directory
 for file in files:
-    if file == str_index:
+    if file == "0":
         continue
     source_file = os.path.join(args.source_path, "sparse", file)
     destination_file = os.path.join(args.source_path, "sparse", "0", file)
