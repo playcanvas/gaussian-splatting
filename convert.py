@@ -37,6 +37,8 @@ colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_execut
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
 use_gpu = 1 if not args.no_gpu else 0
 
+EXIT_FAIL = 1
+
 if not args.skip_matching:
     os.makedirs(args.source_path + "/distorted/sparse", exist_ok=True)
 
@@ -50,7 +52,7 @@ if not args.skip_matching:
     exit_code = os.system(feat_extracton_cmd)
     if exit_code != 0:
         logging.error(f"Feature extraction failed with code {exit_code}. Exiting.")
-        exit(exit_code)
+        exit(EXIT_FAIL)
 
     ## Feature matching
     feat_matching_cmd = colmap_command + " exhaustive_matcher \
@@ -59,7 +61,7 @@ if not args.skip_matching:
     exit_code = os.system(feat_matching_cmd)
     if exit_code != 0:
         logging.error(f"Feature matching failed with code {exit_code}. Exiting.")
-        exit(exit_code)
+        exit(EXIT_FAIL)
 
     ### Bundle adjustment
     # The default Mapper tolerance is unnecessarily large,
@@ -72,7 +74,7 @@ if not args.skip_matching:
     exit_code = os.system(mapper_cmd)
     if exit_code != 0:
         logging.error(f"Mapper failed with code {exit_code}. Exiting.")
-        exit(exit_code)
+        exit(EXIT_FAIL)
 
 
 # select the largest submodel
@@ -109,7 +111,7 @@ img_undist_cmd = (colmap_command + " image_undistorter \
 exit_code = os.system(img_undist_cmd)
 if exit_code != 0:
     logging.error(f"image_undistorter failed with code {exit_code}. Exiting.")
-    exit(exit_code)
+    exit(EXIT_FAIL)
 
 
 def remove_dir_if_exist(path):
@@ -129,7 +131,7 @@ if args.masks_path is not None:
     exit_code = os.system(model_converter_cmd)
     if exit_code != 0:
         logging.error(f"model_converter failed with code {exit_code}. Exiting.")
-        exit(exit_code)
+        exit(EXIT_FAIL)
 
     # replace '.jpg' to '.png'
     with open(args.source_path + "/alpha_distorted_sparse_txt/images.txt", "r+") as f:
@@ -148,7 +150,7 @@ if args.masks_path is not None:
     exit_code = os.system(seg_undist_cmd)
     if exit_code != 0:
         logging.error(f"image_undistorter for segs failed with code {exit_code}. Exiting.")
-        exit(exit_code)
+        exit(EXIT_FAIL)
 
     # switch images
     remove_dir_if_exist(f'{args.source_path}/alpha_undistorted_sparse/alphas')
@@ -215,20 +217,20 @@ if(args.resize):
         exit_code = os.system("mogrify -resize 50% " + destination_file)
         if exit_code != 0:
             logging.error(f"50% resize failed with code {exit_code}. Exiting.")
-            exit(exit_code)
+            exit(EXIT_FAIL)
 
         destination_file = os.path.join(args.source_path, "images_4", file)
         shutil.copy2(source_file, destination_file)
         exit_code = os.system("mogrify -resize 25% " + destination_file)
         if exit_code != 0:
             logging.error(f"25% resize failed with code {exit_code}. Exiting.")
-            exit(exit_code)
+            exit(EXIT_FAIL)
 
         destination_file = os.path.join(args.source_path, "images_8", file)
         shutil.copy2(source_file, destination_file)
         exit_code = os.system("mogrify -resize 12.5% " + destination_file)
         if exit_code != 0:
             logging.error(f"12.5% resize failed with code {exit_code}. Exiting.")
-            exit(exit_code)
+            exit(EXIT_FAIL)
 
 print("Done.")
