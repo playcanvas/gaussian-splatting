@@ -31,6 +31,7 @@ parser.add_argument("--colmap_executable", default="", type=str)
 parser.add_argument("--resize", action="store_true")
 parser.add_argument("--magick_executable", default="", type=str)
 parser.add_argument("--masks_path", type=str)
+parser.add_argument("--generate_text_model", action="store_true")
 args = parser.parse_args()
 colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_executable) > 0 else "colmap"
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
@@ -75,21 +76,35 @@ if not args.skip_matching:
         logging.error(f"Mapper failed with code {exit_code}. Exiting.")
         exit(EXIT_FAIL)
 
-    ### Convert model to text format so we can read cameras
-    convert_cmd = (colmap_command + " model_converter \
-        --input_path " + args.source_path + "/distorted/sparse/0 \
-        --output_path "  + args.source_path + "/distorted/sparse/0 \
-        --output_type TXT")
-    exit_code = os.system(convert_cmd)
-    if exit_code != 0:
-        logging.error(f"Convert failed with code {exit_code}. Exiting.")
-        exit(EXIT_FAIL)
+
+# select the largest submodel
+i = 0
+largest_size = 0
+index = 0
+
+while True:
+    path = args.source_path + "/distorted/sparse/" + str(i)
+    if not os.path.exists(path):
+        break
+
+    # check the file size of images.bin
+    images_bin = path + "/images.bin"
+    size = os.path.getsize(images_bin)
+    if size > largest_size:
+        largest_size = size
+        index = i
+
+    i += 1
+
+str_index = str(index)
+distorted_sparse_path = args.source_path + "/distorted/sparse/" + str_index
+
 
 ### Image undistortion
 ## We need to undistort our images into ideal pinhole intrinsics.
 img_undist_cmd = (colmap_command + " image_undistorter \
     --image_path " + args.source_path + "/input \
-    --input_path " + args.source_path + "/distorted/sparse/0 \
+    --input_path " + distorted_sparse_path + " \
     --output_path " + args.source_path + "\
     --output_type COLMAP")
 
@@ -110,7 +125,7 @@ if args.masks_path is not None:
     # We need to "hack" colmap to undistort segmentation maps modify paths
     # First convert model to text format
     model_converter_cmd = (colmap_command + " model_converter \
-        --input_path " + args.source_path + "/distorted/sparse/0 \
+        --input_path " + distorted_sparse_path + " \
         --output_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
         --output_type TXT")
     exit_code = os.system(model_converter_cmd)
@@ -162,11 +177,23 @@ if args.masks_path is not None:
     Path(f'{args.source_path}/sparse').replace(f'{args.source_path}/sparse_src/')
     Path(f'{args.source_path}/alpha_undistorted_sparse/sparse').replace(f'{args.source_path}/sparse/')
 
+if args.generate_text_model:
+    ### Convert model to text format so we can read cameras
+    convert_cmd = (colmap_command + " model_converter \
+        --input_path " + args.source_path + "/sparse" + " \
+        --output_path "  + args.source_path + "/sparse" + " \
+        --output_type TXT")
+    exit_code = os.system(convert_cmd)
+    if exit_code != 0:
+        logging.error(f"Convert failed with code {exit_code}. Exiting.")
+        exit(exit_code)
+
+# move all files from sparse into sparse/0, as train.py expects it
 files = os.listdir(args.source_path + "/sparse")
 os.makedirs(args.source_path + "/sparse/0", exist_ok=True)
 # Copy each file from the source directory to the destination directory
 for file in files:
-    if file == '0':
+    if file == "0":
         continue
     source_file = os.path.join(args.source_path, "sparse", file)
     destination_file = os.path.join(args.source_path, "sparse", "0", file)
