@@ -211,26 +211,17 @@ if(args.resize):
     # Copy each file from the source directory to the destination directory
     for file in files:
         source_file = os.path.join(args.source_path, "images", file)
+        output_file2 = os.path.join(args.source_path, "images_2", file)
+        output_file4 = os.path.join(args.source_path, "images_4", file)
+        output_file8 = os.path.join(args.source_path, "images_8", file)
 
-        destination_file = os.path.join(args.source_path, "images_2", file)
-        shutil.copy2(source_file, destination_file)
-        exit_code = os.system("mogrify -resize 50% " + destination_file)
+        # generate the resized images in a single call
+        exit_code = os.system("convert " + source_file +
+            " \( +clone -resize 50% -write " + output_file2 + " +delete \)" +
+            " \( +clone -resize 25% -write " + output_file4 + " +delete \)" +
+            " -resize 12.5% " + output_file8)
         if exit_code != 0:
-            logging.error(f"50% resize failed with code {exit_code}. Exiting.")
-            exit(EXIT_FAIL)
-
-        destination_file = os.path.join(args.source_path, "images_4", file)
-        shutil.copy2(source_file, destination_file)
-        exit_code = os.system("mogrify -resize 25% " + destination_file)
-        if exit_code != 0:
-            logging.error(f"25% resize failed with code {exit_code}. Exiting.")
-            exit(EXIT_FAIL)
-
-        destination_file = os.path.join(args.source_path, "images_8", file)
-        shutil.copy2(source_file, destination_file)
-        exit_code = os.system("mogrify -resize 12.5% " + destination_file)
-        if exit_code != 0:
-            logging.error(f"12.5% resize failed with code {exit_code}. Exiting.")
+            logging.error(f"resize failed with code {exit_code}. Exiting.")
             exit(EXIT_FAIL)
 
 print("Done.")
