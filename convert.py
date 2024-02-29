@@ -173,12 +173,14 @@ if args.masks_path is not None:
         output_image = args.source_path + "/images/" + filenames[i][1]
         combine(color_image, mask_image, color_image)
 
-    # copy the modified database to final location for use in next step
+    # copy the modified database to final location for use in training
     target_path = args.source_path + "/sparse/0"
     Path(target_path).mkdir(exist_ok=True)
-    files = os.listdir(mask_model_path)
+
+    source_path = args.masks_path + "/undistorted/sparse"
+    files = os.listdir(source_path)
     for file in files:
-        source_file = os.path.join(mask_model_path, file)
+        source_file = os.path.join(source_path, file)
         destination_file = os.path.join(target_path, file)
         shutil.move(source_file, destination_file)
 else:
@@ -193,7 +195,7 @@ else:
         destination_file = os.path.join(args.source_path, "sparse", "0", file)
         shutil.move(source_file, destination_file)
 
-if(args.resize):
+if (args.resize):
     print("Copying and resizing...")
 
     # Resize images.
