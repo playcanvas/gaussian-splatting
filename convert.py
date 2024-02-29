@@ -171,7 +171,7 @@ if args.masks_path is not None:
         color_image = args.source_path + "/images/" + filenames[i][0]
         mask_image = args.masks_path + "/undistorted/images/" + filenames[i][1]
         output_image = args.source_path + "/images/" + filenames[i][1]
-        combine(color_image, mask_image, color_image)
+        combine(color_image, mask_image, output_image)
 
     # copy the modified database to final location for use in training
     target_path = args.source_path + "/sparse/0"
