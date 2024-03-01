@@ -45,7 +45,7 @@ logging.basicConfig(level = logging.INFO)
 def exec(cmd):
     logging.info(f"Executing: {cmd}")
     try:
-        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, shell=True)
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDERR, shell=True)
     except subprocess.CalledProcessError as e:
         logging.error(f"Command failed with code {e.returncode}. Exiting.")
         exit(e.returncode)
