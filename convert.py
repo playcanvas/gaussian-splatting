@@ -10,6 +10,7 @@
 #
 
 import os
+import subprocess
 import logging
 from argparse import ArgumentParser
 import shutil
@@ -37,7 +38,17 @@ colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_execut
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
 use_gpu = 1 if not args.no_gpu else 0
 
-EXIT_FAIL = 1
+# configure logging
+logging.basicConfig(level = logging.INFO)
+
+# execute a command after logging it and propagate failure correctly
+def exec(cmd):
+    logging.info(f"Executing: {cmd}")
+    try:
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, shell=True)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Command failed with code {e.returncode}. Exiting.")
+        exit(e.returncode)
 
 if not args.skip_matching:
     os.makedirs(args.source_path + "/distorted/sparse", exist_ok=True)
@@ -49,19 +60,13 @@ if not args.skip_matching:
         --ImageReader.single_camera 1 \
         --ImageReader.camera_model " + args.camera + " \
         --SiftExtraction.use_gpu " + str(use_gpu)
-    exit_code = os.system(feat_extracton_cmd)
-    if exit_code != 0:
-        logging.error(f"Feature extraction failed with code {exit_code}. Exiting.")
-        exit(EXIT_FAIL)
+    exec(feat_extracton_cmd)
 
     ## Feature matching
     feat_matching_cmd = colmap_command + " exhaustive_matcher \
         --database_path " + args.source_path + "/distorted/database.db \
         --SiftMatching.use_gpu " + str(use_gpu)
-    exit_code = os.system(feat_matching_cmd)
-    if exit_code != 0:
-        logging.error(f"Feature matching failed with code {exit_code}. Exiting.")
-        exit(EXIT_FAIL)
+    exec(feat_matching_cmd)
 
     ### Bundle adjustment
     # The default Mapper tolerance is unnecessarily large,
@@ -71,11 +76,7 @@ if not args.skip_matching:
         --image_path "  + args.source_path + "/input \
         --output_path "  + args.source_path + "/distorted/sparse \
         --Mapper.ba_global_function_tolerance=0.000001")
-    exit_code = os.system(mapper_cmd)
-    if exit_code != 0:
-        logging.error(f"Mapper failed with code {exit_code}. Exiting.")
-        exit(EXIT_FAIL)
-
+    exec(mapper_cmd)
 
 # select the largest submodel
 i = 0
@@ -107,99 +108,94 @@ img_undist_cmd = (colmap_command + " image_undistorter \
     --input_path " + distorted_sparse_path + " \
     --output_path " + args.source_path + "\
     --output_type COLMAP")
-
-exit_code = os.system(img_undist_cmd)
-if exit_code != 0:
-    logging.error(f"image_undistorter failed with code {exit_code}. Exiting.")
-    exit(EXIT_FAIL)
+exec(img_undist_cmd)
 
 
-def remove_dir_if_exist(path):
-    if Path(path).exists():
-        shutil.rmtree(path)
-
+# Handle masks
 
 if args.masks_path is not None:
-    remove_dir_if_exist(args.source_path + "/alpha_distorted_sparse_txt/")
-    Path(args.source_path + "/alpha_distorted_sparse_txt/").mkdir(exist_ok=True)
-    # We need to "hack" colmap to undistort segmentation maps modify paths
+    # We need to modify the colmap database to reference the mask images
+    # which are always in png format.
+    mask_model_path = args.masks_path + "/model"
+    Path(mask_model_path).mkdir(exist_ok=True)
+
     # First convert model to text format
     model_converter_cmd = (colmap_command + " model_converter \
         --input_path " + distorted_sparse_path + " \
-        --output_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
+        --output_path " + mask_model_path + " \
         --output_type TXT")
-    exit_code = os.system(model_converter_cmd)
-    if exit_code != 0:
-        logging.error(f"model_converter failed with code {exit_code}. Exiting.")
-        exit(EXIT_FAIL)
+    exec(model_converter_cmd)
 
-    # replace '.jpg' to '.png'
-    with open(args.source_path + "/alpha_distorted_sparse_txt/images.txt", "r+") as f:
-        images_txt = f.read()
-        images_txt = images_txt.replace('.jpg', '.png')
-        f.seek(0)
-        f.write(images_txt)
-        f.truncate()
+    # read images.txt
+    with open(mask_model_path + "/images.txt", 'r') as file:
+        lines = file.readlines()
 
-    # Undistort alpha masks
+    # replace image filenames with png extensions (and keep the list of renames for later)
+    filenames = []
+    l = 0
+    for i in range(len(lines)):
+        if lines[i].startswith("#"):
+            # skip comments
+            continue
+        if l % 2 == 0:
+            # handle every second line
+            words = lines[i].rstrip().split(" ")
+            filename = words[-1].split(".")
+            filename[-1] = "png"
+            new_filename = ".".join(filename)
+            filenames.append([words[-1], new_filename])
+            words[-1] = new_filename
+            lines[i] = " ".join(words) + "\n"
+        l += 1
+
+    # write modified images.txt
+    with open(mask_model_path + "/images.txt", 'w') as file:
+        file.writelines(lines)
+
+    # Undistort mask images
     seg_undist_cmd = (colmap_command + " image_undistorter \
         --image_path " + args.masks_path + " \
-        --input_path " + args.source_path + "/alpha_distorted_sparse_txt/ \
-        --output_path " + args.source_path + "/alpha_undistorted_sparse \
+        --input_path " + mask_model_path + " \
+        --output_path " + args.masks_path + "/undistorted \
         --output_type COLMAP")
-    exit_code = os.system(seg_undist_cmd)
-    if exit_code != 0:
-        logging.error(f"image_undistorter for segs failed with code {exit_code}. Exiting.")
-        exit(EXIT_FAIL)
+    exec(seg_undist_cmd)
 
-    # switch images
-    remove_dir_if_exist(f'{args.source_path}/alpha_undistorted_sparse/alphas')
-    Path(f'{args.source_path}/alpha_undistorted_sparse/images').replace(f'{args.source_path}/alpha_undistorted_sparse/alphas')
-    remove_dir_if_exist(f'{args.source_path}/images_src/')
-    Path(f'{args.source_path}/images/').replace(f'{args.source_path}/images_src/')
+    # combine undistorted color and mask images
+    def combine(color_path, alpha_path, output_path):
+        alpha = Image.open(alpha_path).convert('L')
+        clr = Image.open(color_path)
+        clr.putalpha(alpha)
+        clr.save(output_path)
 
-    # concat undistorted images with undistorted alpha masks - TODO: make parallel
-    remove_dir_if_exist(f'{args.source_path}/images/')
-    Path(f'{args.source_path}/images/').mkdir()
+    for i in range(len(filenames)):
+        color_image = args.source_path + "/images/" + filenames[i][0]
+        mask_image = args.masks_path + "/undistorted/images/" + filenames[i][1]
+        output_image = args.source_path + "/images/" + filenames[i][1]
+        combine(color_image, mask_image, output_image)
 
-    def concat_alpha(seg_path):
-        seg = Image.open(seg_path).convert('L')
-        img = Image.open(f'{args.source_path}/images_src/{Path(seg_path).stem}.jpg')
-        img.putalpha(seg)
-        img.save(f'{args.source_path}/images/{Path(seg_path).stem}.png')
+    # copy the modified database to final location for use in training
+    target_path = args.source_path + "/sparse/0"
+    Path(target_path).mkdir(exist_ok=True)
 
-    all_masks_paths = glob(args.source_path + "/alpha_undistorted_sparse/alphas/*.png")
-    with mp.Pool() as pool:
-        list(tqdm(pool.imap_unordered(concat_alpha, all_masks_paths), total=len(all_masks_paths)))
+    source_path = args.masks_path + "/undistorted/sparse"
+    files = os.listdir(source_path)
+    for file in files:
+        source_file = os.path.join(source_path, file)
+        destination_file = os.path.join(target_path, file)
+        shutil.move(source_file, destination_file)
+else:
+    # move all files from sparse into sparse/0, as train.py expects it
+    files = os.listdir(args.source_path + "/sparse")
+    os.makedirs(args.source_path + "/sparse/0", exist_ok=True)
+    # Copy each file from the source directory to the destination directory
+    for file in files:
+        if file == "0":
+            continue
+        source_file = os.path.join(args.source_path, "sparse", file)
+        destination_file = os.path.join(args.source_path, "sparse", "0", file)
+        shutil.move(source_file, destination_file)
 
-    # switch models
-    remove_dir_if_exist(f'{args.source_path}/sparse_src/')
-    Path(f'{args.source_path}/sparse').replace(f'{args.source_path}/sparse_src/')
-    Path(f'{args.source_path}/alpha_undistorted_sparse/sparse').replace(f'{args.source_path}/sparse/')
-
-if args.generate_text_model:
-    ### Convert model to text format so we can read cameras
-    convert_cmd = (colmap_command + " model_converter \
-        --input_path " + args.source_path + "/sparse" + " \
-        --output_path "  + args.source_path + "/sparse" + " \
-        --output_type TXT")
-    exit_code = os.system(convert_cmd)
-    if exit_code != 0:
-        logging.error(f"Convert failed with code {exit_code}. Exiting.")
-        exit(exit_code)
-
-# move all files from sparse into sparse/0, as train.py expects it
-files = os.listdir(args.source_path + "/sparse")
-os.makedirs(args.source_path + "/sparse/0", exist_ok=True)
-# Copy each file from the source directory to the destination directory
-for file in files:
-    if file == "0":
-        continue
-    source_file = os.path.join(args.source_path, "sparse", file)
-    destination_file = os.path.join(args.source_path, "sparse", "0", file)
-    shutil.move(source_file, destination_file)
-
-if(args.resize):
+if (args.resize):
     print("Copying and resizing...")
 
     # Resize images.
@@ -211,26 +207,17 @@ if(args.resize):
     # Copy each file from the source directory to the destination directory
     for file in files:
         source_file = os.path.join(args.source_path, "images", file)
+        output_file2 = os.path.join(args.source_path, "images_2", file)
+        output_file4 = os.path.join(args.source_path, "images_4", file)
+        output_file8 = os.path.join(args.source_path, "images_8", file)
 
-        destination_file = os.path.join(args.source_path, "images_2", file)
-        shutil.copy2(source_file, destination_file)
-        exit_code = os.system("mogrify -resize 50% " + destination_file)
-        if exit_code != 0:
-            logging.error(f"50% resize failed with code {exit_code}. Exiting.")
-            exit(EXIT_FAIL)
-
-        destination_file = os.path.join(args.source_path, "images_4", file)
-        shutil.copy2(source_file, destination_file)
-        exit_code = os.system("mogrify -resize 25% " + destination_file)
-        if exit_code != 0:
-            logging.error(f"25% resize failed with code {exit_code}. Exiting.")
-            exit(EXIT_FAIL)
-
-        destination_file = os.path.join(args.source_path, "images_8", file)
-        shutil.copy2(source_file, destination_file)
-        exit_code = os.system("mogrify -resize 12.5% " + destination_file)
-        if exit_code != 0:
-            logging.error(f"12.5% resize failed with code {exit_code}. Exiting.")
-            exit(EXIT_FAIL)
+        # generate the resized images in a single call
+        generate_thumbnails_cmd = ("convert "
+            # resize input file, uses less memory
+            f"{source_file}[50%]"
+            f" -write mpr:thumb -write {output_file2} +delete"
+            f" mpr:thumb -resize 50% -write mpr:thumb -write {output_file4} +delete"
+            f" mpr:thumb -resize 50% {output_file8}")
+        exec(generate_thumbnails_cmd)
 
 print("Done.")
