@@ -10,6 +10,7 @@
 #
 
 import os
+import sys
 import subprocess
 import logging
 from argparse import ArgumentParser
@@ -36,20 +37,41 @@ colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_execut
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
 use_gpu = 1 if not args.no_gpu else 0
 
-# configure logging
-logging.basicConfig(level = logging.INFO)
-
 # execute a command after logging it and propagate failure correctly
 def exec(cmd):
-    logging.info(f"Executing: {cmd}")
+    logger.info(f"Executing: {cmd}")
     try:
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, shell=True)
     except subprocess.CalledProcessError as e:
-        logging.error(f"Command failed with code {e.returncode}. Exiting.")
+        logger.error(f"Command failed with code {e.returncode}. Exiting.")
         exit(e.returncode)
 
 def replace_extension(filename, new_extension):
     return os.path.splitext(filename)[0] + new_extension
+
+# configure logging
+def init_logging():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.addFilter(lambda record: record.levelno <= logging.INFO)
+    stdout_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+    stdout_handler.setFormatter(stdout_formatter)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)  # Set to WARNING to catch WARNING, ERROR, and CRITICAL
+    stderr_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+    stderr_handler.setFormatter(stderr_formatter)
+
+    # Add both handlers to the logger
+    logger.addHandler(stdout_handler)
+    logger.addHandler(stderr_handler)
+
+    return logger
+
+logger = init_logging()
 
 input_images_path = args.source_path + "/input/images"
 distorted_path = args.source_path + "/distorted"
