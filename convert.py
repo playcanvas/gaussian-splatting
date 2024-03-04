@@ -51,7 +51,7 @@ def replace_extension(filename, new_extension):
 
 # configure logging
 def init_logging():
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('convert.py')
     logger.setLevel(logging.INFO)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
