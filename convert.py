@@ -188,23 +188,20 @@ if args.has_masks:
         if mask_file != file:
             os.remove(color_image)
 
-    # overwrite the undistorted model with the updated one
-    model_converter_cmd = (colmap_command + " model_converter \
-        --input_path " + masks_path + " \
-        --output_path " + undistorted_path + "/sparse \
-        --output_type BIN")
-    exec(model_converter_cmd)
+    model_src_path = masks_path + "/undistorted/sparse"
+else:
+    model_src_path = undistorted_path + "/sparse"
 
 # move all files from sparse into sparse/0, as train.py expects it
-files = os.listdir(undistorted_path + "/sparse")
+files = os.listdir(model_src_path)
 os.makedirs(undistorted_path + "/sparse/0", exist_ok=True)
 # Copy each file from the source directory to the destination directory
 for file in files:
     if file == "0":
         continue
-    source_file = os.path.join(undistorted_path, "sparse", file)
+    source_file = os.path.join(model_src_path, file)
     destination_file = os.path.join(undistorted_path, "sparse", "0", file)
-    shutil.move(source_file, destination_file)
+    shutil.copy(source_file, destination_file)
 
 # Generate 1/2, 1/4 and 1/8th resized images
 if (args.resize):
