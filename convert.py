@@ -49,7 +49,8 @@ def exec(cmd):
 def replace_extension(filename, new_extension):
     return os.path.splitext(filename)[0] + new_extension
 
-# configure logging
+# configure logging so info goes to stdout and warnings and errors go to stderr
+# (how the heck is this not the default behavior?)
 def init_logging():
     logger = logging.getLogger('convert.py')
     logger.setLevel(logging.INFO)
