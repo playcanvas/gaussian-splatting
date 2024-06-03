@@ -187,7 +187,7 @@ python train.py -s <path to COLMAP or NeRF Synthetic dataset>
   #### --opacity_reset_interval
   How frequently to reset opacity, ```3_000``` by default. 
   #### --min_opacity
-  Minimum opacity value, 0.01 by default.
+  Minimum opacity value, 0.1 by default.
   #### --lambda_dssim
   Influence of SSIM on total loss from 0 to 1, ```0.2``` by default. 
   #### --percent_dense
